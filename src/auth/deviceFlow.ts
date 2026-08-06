@@ -42,12 +42,17 @@ export async function pollForToken(
 ): Promise<string> {
     let intervalMs = device.interval * 1000;
     // iOS suspends the app (and kills in-flight requests) while the user is
-    // off in the browser entering the code, so failed polls are expected —
-    // only give up after many failures in a row.
-    const maxConsecutiveFailures = 10;
-    let consecutiveFailures = 0;
+    // off in the browser entering the code, so failed polls are expected.
+    // Retry everything; the device code's own lifetime is the deadline.
+    let elapsedMs = 0;
     for (;;) {
+        if (elapsedMs >= device.expires_in * 1000) {
+            throw new Error(
+                "The GitHub sign-in code expired. Please start over."
+            );
+        }
         await sleep(intervalMs);
+        elapsedMs += intervalMs;
         let res: Record<string, unknown>;
         try {
             res = await http("https://github.com/login/oauth/access_token", {
@@ -55,14 +60,7 @@ export async function pollForToken(
                 device_code: device.device_code,
                 grant_type: "urn:ietf:params:oauth:grant-type:device_code",
             });
-            consecutiveFailures = 0;
-        } catch (e) {
-            consecutiveFailures++;
-            if (consecutiveFailures >= maxConsecutiveFailures) {
-                throw new Error(
-                    `GitHub sign-in failed: network unreachable after ${maxConsecutiveFailures} attempts (${String(e)})`
-                );
-            }
+        } catch {
             continue;
         }
         if (typeof res.access_token === "string") {

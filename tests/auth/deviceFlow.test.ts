@@ -132,37 +132,26 @@ describe("pollForToken network resilience", () => {
         expect(calls).toBe(2);
     });
 
-    it("gives up after many consecutive network failures", async () => {
-        const http: HttpPost = () =>
-            Promise.reject(new Error("connection timed out"));
-
-        await expect(
-            pollForToken(http, "client42", DEVICE_CODE, noSleep)
-        ).rejects.toThrow("network");
-    });
-
-    it("resets the failure count once a poll gets through", async () => {
+    it("retries failures until the device code lifetime elapses, then stops", async () => {
         let calls = 0;
         const http: HttpPost = () => {
             calls++;
-            // Fail every other request; a strict consecutive-failure cap
-            // should never trip.
-            if (calls % 2 === 1 && calls < 30) {
-                return Promise.reject(new Error("socket died"));
-            }
-            if (calls < 30) {
-                return Promise.resolve({ error: "authorization_pending" });
-            }
-            return Promise.resolve({ access_token: "gho_token" });
+            return Promise.reject(new Error("connection timed out"));
         };
 
-        const token = await pollForToken(
-            http,
-            "client42",
-            DEVICE_CODE,
-            noSleep
-        );
+        await expect(
+            pollForToken(http, "client42", DEVICE_CODE, noSleep)
+        ).rejects.toThrow("expired");
+        // 900s lifetime / 5s interval = 180 polls before giving up.
+        expect(calls).toBe(180);
+    });
 
-        expect(token).toBe("gho_token");
+    it("treats endless authorization_pending as expiry too", async () => {
+        const http: HttpPost = () =>
+            Promise.resolve({ error: "authorization_pending" });
+
+        await expect(
+            pollForToken(http, "client42", DEVICE_CODE, noSleep)
+        ).rejects.toThrow("expired");
     });
 });
