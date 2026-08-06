@@ -109,3 +109,60 @@ describe("pollForToken", () => {
         ).rejects.toThrow("denied");
     });
 });
+
+describe("pollForToken network resilience", () => {
+    it("keeps polling after a transient network failure", async () => {
+        let calls = 0;
+        const http: HttpPost = () => {
+            calls++;
+            if (calls === 1) {
+                return Promise.reject(new Error("connection timed out"));
+            }
+            return Promise.resolve({ access_token: "gho_token" });
+        };
+
+        const token = await pollForToken(
+            http,
+            "client42",
+            DEVICE_CODE,
+            noSleep
+        );
+
+        expect(token).toBe("gho_token");
+        expect(calls).toBe(2);
+    });
+
+    it("gives up after many consecutive network failures", async () => {
+        const http: HttpPost = () =>
+            Promise.reject(new Error("connection timed out"));
+
+        await expect(
+            pollForToken(http, "client42", DEVICE_CODE, noSleep)
+        ).rejects.toThrow("network");
+    });
+
+    it("resets the failure count once a poll gets through", async () => {
+        let calls = 0;
+        const http: HttpPost = () => {
+            calls++;
+            // Fail every other request; a strict consecutive-failure cap
+            // should never trip.
+            if (calls % 2 === 1 && calls < 30) {
+                return Promise.reject(new Error("socket died"));
+            }
+            if (calls < 30) {
+                return Promise.resolve({ error: "authorization_pending" });
+            }
+            return Promise.resolve({ access_token: "gho_token" });
+        };
+
+        const token = await pollForToken(
+            http,
+            "client42",
+            DEVICE_CODE,
+            noSleep
+        );
+
+        expect(token).toBe("gho_token");
+    });
+});
