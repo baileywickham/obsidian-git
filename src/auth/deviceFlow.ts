@@ -41,9 +41,11 @@ export async function pollForToken(
     sleep: (ms: number) => Promise<void>
 ): Promise<string> {
     let intervalMs = device.interval * 1000;
-    // iOS suspends the app (and kills in-flight requests) while the user is
-    // off in the browser entering the code, so failed polls are expected.
-    // Retry everything; the device code's own lifetime is the deadline.
+    // iOS kills in-flight requests when the app is backgrounded to enter the
+    // code in the browser, so isolated failed polls are expected — but a run
+    // of them means the network is genuinely down.
+    const maxConsecutiveFailures = 5;
+    let consecutiveFailures = 0;
     let elapsedMs = 0;
     for (;;) {
         if (elapsedMs >= device.expires_in * 1000) {
@@ -60,7 +62,14 @@ export async function pollForToken(
                 device_code: device.device_code,
                 grant_type: "urn:ietf:params:oauth:grant-type:device_code",
             });
-        } catch {
+            consecutiveFailures = 0;
+        } catch (e) {
+            consecutiveFailures++;
+            if (consecutiveFailures >= maxConsecutiveFailures) {
+                throw new Error(
+                    `GitHub sign-in failed: network unreachable (${String(e)})`
+                );
+            }
             continue;
         }
         if (typeof res.access_token === "string") {
