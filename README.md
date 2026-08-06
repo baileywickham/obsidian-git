@@ -1,7 +1,7 @@
-# Obsidian Git Plugin — BW mobile fork
+# obsidian-git-mobile
 
 Personal fork of [Vinzent03/obsidian-git](https://github.com/Vinzent03/obsidian-git)
-(plugin id `obsidian-git-bw`) that fixes mobile ergonomics. Install via
+(plugin id `obsidian-git-mobile`) that fixes mobile ergonomics. Install via
 [BRAT](https://github.com/TfTHacker/obsidian42-brat) pointing at
 `baileywickham/obsidian-git`; disable the stock plugin.
 

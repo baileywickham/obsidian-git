@@ -776,7 +776,7 @@ export class ObsidianGitSettingsTab extends PluginSettingTab {
                     })
             );
 
-        new Setting(containerEl).setName("Mobile sync (BW fork)").setHeading();
+        new Setting(containerEl).setName("Mobile sync (fork)").setHeading();
 
         new Setting(containerEl)
             .setName("GitHub OAuth client ID")

@@ -30,7 +30,7 @@ export async function signInWithGitHub(plugin: ObsidianGit): Promise<boolean> {
     const clientId = plugin.settings.githubOauthClientId;
     if (!clientId) {
         new Notice(
-            "No GitHub OAuth client ID configured. Set one under Settings → Git (BW) → Mobile sync.",
+            "No GitHub OAuth client ID configured. Set one under Settings → Git Mobile → Mobile sync.",
             10000
         );
         return false;
