@@ -15,7 +15,8 @@ Personal fork of [Vinzent03/obsidian-git](https://github.com/Vinzent03/obsidian-
 - **Generate mobile setup link** (desktop command): copies an encrypted
   `obsidian://git-setup?d=…` link that configures a phone in one tap —
   applies sync settings, runs the GitHub sign-in, and clones the vault if
-  it isn't a repo yet. The passphrase you choose decrypts it on the phone.
+  it isn't a repo yet. Links are self-contained, expire after 1 hour, and
+  the phone confirms the target repo before applying.
 - **Sync on app open/close** (setting `syncOnAppLifecycle`): pull on
   foreground, commit-and-sync on background — combined with upstream's
   auto-backup-after-file-change and `disablePopups`, sync is invisible.
