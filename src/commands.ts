@@ -1,4 +1,6 @@
 import { Notice, Platform, TFolder, WorkspaceLeaf } from "obsidian";
+import { signInWithGitHub } from "./auth/githubSignIn";
+import { generateMobileSetupLink } from "./setup/setupFlow";
 import { HISTORY_VIEW_CONFIG, SOURCE_CONTROL_VIEW_CONFIG } from "./constants";
 import { SimpleGit } from "./gitManager/simpleGit";
 import ObsidianGit from "./main";
@@ -11,6 +13,24 @@ import { togglePreviewHunk } from "./editor/signs/tooltip";
 
 export function addCommmands(plugin: ObsidianGit) {
     const app = plugin.app;
+
+    plugin.addCommand({
+        id: "github-sign-in",
+        name: "Sign in with GitHub",
+        callback: () => {
+            signInWithGitHub(plugin).catch((e) => plugin.displayError(e));
+        },
+    });
+
+    plugin.addCommand({
+        id: "generate-mobile-setup-link",
+        name: "Generate mobile setup link",
+        callback: () => {
+            generateMobileSetupLink(plugin).catch((e) =>
+                plugin.displayError(e)
+            );
+        },
+    });
 
     plugin.addCommand({
         id: "edit-gitignore",

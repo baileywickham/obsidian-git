@@ -71,6 +71,15 @@ export interface ObsidianGitSettings {
     refreshSourceControl: boolean;
     basePath: string;
     showedMobileNotice: boolean;
+    /**
+     * Client ID of the GitHub OAuth App (with device flow enabled) used by
+     * "Sign in with GitHub".
+     */
+    githubOauthClientId: string;
+    /**
+     * Pull on app foreground and commit-and-sync on background.
+     */
+    syncOnAppLifecycle: boolean;
     refreshSourceControlTimer: number;
     showBranchStatusBar: boolean;
     lineAuthor: LineAuthorSettings;

@@ -21,6 +21,8 @@ import { StatusBar } from "src/statusBar";
 import { CustomMessageModal } from "src/ui/modals/customMessageModal";
 import AutomaticsManager from "./automaticsManager";
 import { addCommmands } from "./commands";
+import { registerSetupUriHandler } from "./setup/setupFlow";
+import { registerLifecycleSync } from "./sync/lifecycle";
 import {
     CONFLICT_OUTPUT_FILE,
     DEFAULT_SETTINGS,
@@ -315,6 +317,9 @@ export default class ObsidianGit extends Plugin {
         this.editorIntegration.onLoadPlugin();
 
         this.setRefreshDebouncer();
+
+        registerSetupUriHandler(this);
+        registerLifecycleSync(this);
 
         addCommmands(this);
     }

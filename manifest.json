@@ -1,10 +1,10 @@
 {
     "author": "Vinzent",
     "authorUrl": "https://github.com/Vinzent03",
-    "id": "obsidian-git",
-    "name": "Git",
-    "description": "Integrate Git version control with automatic backup and other advanced features.",
+    "id": "obsidian-git-bw",
+    "name": "Git (BW)",
+    "description": "Bailey's mobile-ergonomics fork of obsidian-git: GitHub device-flow sign-in, one-tap setup link, invisible sync.",
     "isDesktopOnly": false,
     "fundingUrl": "https://ko-fi.com/vinzent",
-    "version": "2.38.6"
+    "version": "0.1.0"
 }

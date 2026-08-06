@@ -12,7 +12,9 @@ import {
     DEFAULT_SETTINGS,
     GIT_LINE_AUTHORING_MOVEMENT_DETECTION_MINIMAL_LENGTH,
 } from "src/constants";
+import { signInWithGitHub } from "src/auth/githubSignIn";
 import { IsomorphicGit } from "src/gitManager/isomorphicGit";
+import { generateMobileSetupLink } from "src/setup/setupFlow";
 import { SimpleGit } from "src/gitManager/simpleGit";
 import { previewColor } from "src/editor/lineAuthor/lineAuthorProvider";
 import type {
@@ -773,6 +775,64 @@ export class ObsidianGitSettingsTab extends PluginSettingTab {
                         await plugin.saveSettings();
                     })
             );
+
+        new Setting(containerEl).setName("Mobile sync (BW fork)").setHeading();
+
+        new Setting(containerEl)
+            .setName("GitHub OAuth client ID")
+            .setDesc(
+                "Client ID of your GitHub OAuth App with device flow enabled. Used by 'Sign in with GitHub'."
+            )
+            .addText((cb) => {
+                cb.setValue(plugin.settings.githubOauthClientId);
+                cb.onChange(async (value) => {
+                    plugin.settings.githubOauthClientId = value.trim();
+                    await plugin.saveSettings();
+                });
+            });
+
+        new Setting(containerEl)
+            .setName("Sign in with GitHub")
+            .setDesc(
+                "Fetch and store a token via the device flow instead of pasting a personal access token."
+            )
+            .addButton((cb) => {
+                cb.setButtonText("Sign in");
+                cb.onClick(() => {
+                    signInWithGitHub(plugin).catch((e) =>
+                        plugin.displayError(e)
+                    );
+                });
+            });
+
+        new Setting(containerEl)
+            .setName("Sync on app open/close")
+            .setDesc(
+                "Pull when Obsidian comes to the foreground and commit-and-sync when it goes to the background."
+            )
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(plugin.settings.syncOnAppLifecycle)
+                    .onChange(async (value) => {
+                        plugin.settings.syncOnAppLifecycle = value;
+                        await plugin.saveSettings();
+                    })
+            );
+
+        if (Platform.isDesktopApp)
+            new Setting(containerEl)
+                .setName("Generate mobile setup link")
+                .setDesc(
+                    "Copy an encrypted obsidian://git-setup link that configures your phone in one tap."
+                )
+                .addButton((cb) => {
+                    cb.setButtonText("Copy link");
+                    cb.onClick(() => {
+                        generateMobileSetupLink(plugin).catch((e) =>
+                            plugin.displayError(e)
+                        );
+                    });
+                });
 
         if (plugin.gitManager instanceof IsomorphicGit) {
             new Setting(containerEl)

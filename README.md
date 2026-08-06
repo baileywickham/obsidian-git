@@ -1,3 +1,29 @@
+# Obsidian Git Plugin — BW mobile fork
+
+Personal fork of [Vinzent03/obsidian-git](https://github.com/Vinzent03/obsidian-git)
+(plugin id `obsidian-git-bw`) that fixes mobile ergonomics. Install via
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) pointing at
+`baileywickham/obsidian-git`; disable the stock plugin.
+
+**Added on top of upstream:**
+
+- **Sign in with GitHub** (settings button or command): OAuth device flow —
+  tap a link, type a short code, done. No PAT pasting, no SSH keys. Stores
+  the token in the same slot the manual PAT entry uses. Requires a GitHub
+  OAuth App client ID (create at github.com/settings/applications/new with
+  device flow enabled; paste the client ID into settings once).
+- **Generate mobile setup link** (desktop command): copies an encrypted
+  `obsidian://git-setup?d=…` link that configures a phone in one tap —
+  applies sync settings, runs the GitHub sign-in, and clones the vault if
+  it isn't a repo yet. The passphrase you choose decrypts it on the phone.
+- **Sync on app open/close** (setting `syncOnAppLifecycle`): pull on
+  foreground, commit-and-sync on background — combined with upstream's
+  auto-backup-after-file-change and `disablePopups`, sync is invisible.
+
+Upstream README follows.
+
+---
+
 # Obsidian Git Plugin
 
 A powerful community plugin for [Obsidian.md](https://obsidian.md) that brings Git integration right into your vault. Automatically commit, pull, push, and see your changes — all within Obsidian.
