@@ -7,13 +7,19 @@ import { formatRemoteUrl } from "../utils";
 import {
     decodeSetupPayload,
     encodeSetupPayload,
+    generateSetupKey,
+    isSetupPayloadExpired,
     rewriteSshToHttps,
 } from "./setupUri";
 
+const LINK_VALIDITY_MS = 60 * 60 * 1000;
+
 /**
  * Desktop command: packs the origin remote (rewritten to HTTPS for
- * isomorphic-git) and mobile-tuned settings into an encrypted
- * obsidian://git-setup link and puts it on the clipboard.
+ * isomorphic-git) and mobile-tuned settings into an encrypted, time-limited
+ * obsidian://git-setup link and puts it on the clipboard. The link is
+ * self-contained — the key travels in the link and the phone only confirms
+ * the target repo before applying.
  */
 export async function generateMobileSetupLink(
     plugin: ObsidianGit
@@ -24,13 +30,6 @@ export async function generateMobileSetupLink(
         new Notice("No 'origin' remote found — nothing to set up on mobile.");
         return;
     }
-
-    const passphrase = await new GeneralModal(plugin, {
-        placeholder:
-            "Choose a passphrase for the setup link (you'll enter it on your phone)",
-        allowEmpty: false,
-    }).openAndGetResult();
-    if (!passphrase) return;
 
     const settings: Partial<ObsidianGitSettings> = {
         ...plugin.settings,
@@ -47,39 +46,65 @@ export async function generateMobileSetupLink(
         showedMobileNotice: true,
     };
 
+    const key = generateSetupKey();
     const encoded = await encodeSetupPayload(
-        { remoteUrl: rewriteSshToHttps(remote), settings },
-        passphrase
+        {
+            remoteUrl: rewriteSshToHttps(remote),
+            settings,
+            expiresAt: Date.now() + LINK_VALIDITY_MS,
+        },
+        key
     );
-    await navigator.clipboard.writeText(`obsidian://git-setup?d=${encoded}`);
+    await navigator.clipboard.writeText(
+        `obsidian://git-setup?d=${encoded}&k=${key}`
+    );
     new Notice(
-        "Mobile setup link copied to clipboard. Send it to your phone (AirDrop/iMessage) and tap it there.",
+        "Mobile setup link copied to clipboard — valid for 1 hour. Send it to your phone (AirDrop/iMessage) and tap it there.",
         10000
     );
 }
 
 export function registerSetupUriHandler(plugin: ObsidianGit): void {
     plugin.registerObsidianProtocolHandler("git-setup", (params) => {
-        handleSetupUri(plugin, params.d).catch((e) => plugin.displayError(e));
+        handleSetupUri(plugin, params.d, params.k).catch((e) =>
+            plugin.displayError(e)
+        );
     });
 }
 
 async function handleSetupUri(
     plugin: ObsidianGit,
-    encoded: string | undefined
+    encoded: string | undefined,
+    key: string | undefined
 ): Promise<void> {
-    if (!encoded) {
-        new Notice("Setup link is missing its payload.");
+    if (!encoded || !key) {
+        new Notice("Setup link is missing its payload or key.");
         return;
     }
-    const passphrase = await new GeneralModal(plugin, {
-        placeholder: "Enter the setup link passphrase",
-        allowEmpty: false,
-    }).openAndGetResult();
-    if (!passphrase) return;
 
     // Nothing is applied unless the whole payload decrypts and parses.
-    const payload = await decodeSetupPayload(encoded, passphrase);
+    const payload = await decodeSetupPayload(encoded, key);
+
+    if (isSetupPayloadExpired(payload, Date.now())) {
+        new Notice(
+            "This setup link has expired. Generate a fresh one on your desktop.",
+            10000
+        );
+        return;
+    }
+
+    // The link key proves nothing about the sender, so show what will be
+    // applied and let the user refuse a link they didn't generate.
+    const confirmOption = "Apply setup";
+    const choice = await new GeneralModal(plugin, {
+        options: [confirmOption, "Cancel"],
+        placeholder: `Configure git sync against ${payload.remoteUrl}?`,
+        onlySelection: true,
+    }).openAndGetResult();
+    if (choice !== confirmOption) {
+        new Notice("Setup cancelled.");
+        return;
+    }
 
     Object.assign(plugin.settings, payload.settings);
     await plugin.saveSettings();

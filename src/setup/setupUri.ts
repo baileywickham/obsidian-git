@@ -1,20 +1,23 @@
 /**
  * Encrypted payload for the `obsidian://git-setup` one-tap mobile setup link.
  *
- * Format: base64url( 16-byte PBKDF2 salt || 12-byte AES-GCM IV || ciphertext ).
- * GCM authenticates the ciphertext, so a wrong passphrase or corrupted
- * payload fails closed in `decodeSetupPayload`.
+ * The link is self-contained: a random AES-GCM key travels in the link
+ * (`k=` parameter) alongside the payload (`d=` parameter, base64url of
+ * 12-byte IV || ciphertext). The payload carries an `expiresAt` timestamp
+ * sealed under GCM authentication, so a stale or corrupted link fails
+ * closed — no passphrase to type on the receiving device.
  */
 import type { ObsidianGitSettings } from "../types";
 
 export interface MobileSetupPayload {
     remoteUrl: string;
     settings: Partial<ObsidianGitSettings>;
+    /** Epoch milliseconds after which the link must be refused. */
+    expiresAt: number;
 }
 
-const SALT_LENGTH = 16;
 const IV_LENGTH = 12;
-const PBKDF2_ITERATIONS = 100_000;
+const KEY_LENGTH = 32;
 
 export function rewriteSshToHttps(url: string): string {
     const scpStyle = url.match(/^[\w.-]+@([\w.-]+):(.+)$/);
@@ -30,51 +33,58 @@ export function rewriteSshToHttps(url: string): string {
     return url;
 }
 
+/** A fresh random link key, base64url-encoded for the `k=` parameter. */
+export function generateSetupKey(): string {
+    return toBase64Url(crypto.getRandomValues(new Uint8Array(KEY_LENGTH)));
+}
+
+export function isSetupPayloadExpired(
+    payload: MobileSetupPayload,
+    now: number
+): boolean {
+    return now > payload.expiresAt;
+}
+
 export async function encodeSetupPayload(
     payload: MobileSetupPayload,
-    passphrase: string
+    key: string
 ): Promise<string> {
-    const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
     const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
-    const key = await deriveKey(passphrase, salt);
     const ciphertext = new Uint8Array(
         await crypto.subtle.encrypt(
             { name: "AES-GCM", iv },
-            key,
+            await importKey(key),
             new TextEncoder().encode(JSON.stringify(payload))
         )
     );
 
-    const packed = new Uint8Array(salt.length + iv.length + ciphertext.length);
-    packed.set(salt);
-    packed.set(iv, salt.length);
-    packed.set(ciphertext, salt.length + iv.length);
+    const packed = new Uint8Array(iv.length + ciphertext.length);
+    packed.set(iv);
+    packed.set(ciphertext, iv.length);
     return toBase64Url(packed);
 }
 
 export async function decodeSetupPayload(
     encoded: string,
-    passphrase: string
+    key: string
 ): Promise<MobileSetupPayload> {
     const packed = fromBase64Url(encoded);
-    if (packed.length <= SALT_LENGTH + IV_LENGTH) {
+    if (packed.length <= IV_LENGTH) {
         throw new Error("Setup link is corrupted or incomplete.");
     }
-    const salt = packed.slice(0, SALT_LENGTH);
-    const iv = packed.slice(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
-    const ciphertext = packed.slice(SALT_LENGTH + IV_LENGTH);
+    const iv = packed.slice(0, IV_LENGTH);
+    const ciphertext = packed.slice(IV_LENGTH);
 
-    const key = await deriveKey(passphrase, salt);
     let plaintext: ArrayBuffer;
     try {
         plaintext = await crypto.subtle.decrypt(
             { name: "AES-GCM", iv },
-            key,
+            await importKey(key),
             ciphertext
         );
     } catch {
         throw new Error(
-            "Could not decrypt setup link. Wrong passphrase or corrupted link."
+            "Could not decrypt setup link. It may be corrupted or from a different device."
         );
     }
     return JSON.parse(
@@ -82,29 +92,15 @@ export async function decodeSetupPayload(
     ) as MobileSetupPayload;
 }
 
-async function deriveKey(
-    passphrase: string,
-    salt: Uint8Array
-): Promise<CryptoKey> {
-    const keyMaterial = await crypto.subtle.importKey(
-        "raw",
-        new TextEncoder().encode(passphrase),
-        "PBKDF2",
-        false,
-        ["deriveKey"]
-    );
-    return crypto.subtle.deriveKey(
-        {
-            name: "PBKDF2",
-            salt,
-            iterations: PBKDF2_ITERATIONS,
-            hash: "SHA-256",
-        },
-        keyMaterial,
-        { name: "AES-GCM", length: 256 },
-        false,
-        ["encrypt", "decrypt"]
-    );
+async function importKey(key: string): Promise<CryptoKey> {
+    const raw = fromBase64Url(key);
+    if (raw.length !== KEY_LENGTH) {
+        throw new Error("Setup link key is malformed.");
+    }
+    return crypto.subtle.importKey("raw", raw, "AES-GCM", false, [
+        "encrypt",
+        "decrypt",
+    ]);
 }
 
 function toBase64Url(bytes: Uint8Array): string {
