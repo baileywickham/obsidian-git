@@ -1,10 +1,11 @@
-import { Notice } from "obsidian";
+import { Modal, Notice } from "obsidian";
+import QRCode from "qrcode";
 import { signInWithGitHub } from "../auth/githubSignIn";
 import type ObsidianGit from "../main";
-import type { ObsidianGitSettings } from "../types";
 import { GeneralModal } from "../ui/modals/generalModal";
 import { formatRemoteUrl } from "../utils";
 import {
+    buildMobileSettings,
     decodeSetupPayload,
     encodeSetupPayload,
     generateSetupKey,
@@ -31,37 +32,46 @@ export async function generateMobileSetupLink(
         return;
     }
 
-    const settings: Partial<ObsidianGitSettings> = {
-        ...plugin.settings,
-        // Desktop-specific paths never apply on the phone.
-        basePath: "",
-        gitDir: "",
-        // Invisible-sync defaults for mobile.
-        syncOnAppLifecycle: true,
-        autoPullOnBoot: true,
-        autoBackupAfterFileChange: true,
-        autoSaveInterval: 1,
-        pullBeforePush: true,
-        disablePopups: true,
-        showedMobileNotice: true,
-    };
-
     const key = generateSetupKey();
     const encoded = await encodeSetupPayload(
         {
             remoteUrl: rewriteSshToHttps(remote),
-            settings,
+            settings: buildMobileSettings(plugin.settings),
             expiresAt: Date.now() + LINK_VALIDITY_MS,
         },
         key
     );
-    await navigator.clipboard.writeText(
-        `obsidian://git-setup?d=${encoded}&k=${key}`
-    );
-    new Notice(
-        "Mobile setup link copied to clipboard — valid for 1 hour. Send it to your phone (AirDrop/iMessage) and tap it there.",
-        10000
-    );
+    const link = `obsidian://git-setup?d=${encoded}&k=${key}`;
+    await navigator.clipboard.writeText(link);
+    new SetupQrModal(plugin, link).open();
+}
+
+class SetupQrModal extends Modal {
+    constructor(
+        private readonly plugin: ObsidianGit,
+        private readonly link: string
+    ) {
+        super(plugin.app);
+    }
+
+    override onOpen(): void {
+        this.setTitle("Scan with your phone's camera");
+        this.contentEl.createEl("p", {
+            text: "iOS will offer to open the link in Obsidian. The link is also on your clipboard and expires in 1 hour.",
+        });
+        QRCode.toDataURL(this.link, {
+            width: 440,
+            errorCorrectionLevel: "L",
+            margin: 2,
+        })
+            .then((dataUrl) => {
+                const img = this.contentEl.createEl("img");
+                img.src = dataUrl;
+                img.style.width = "100%";
+                img.style.imageRendering = "pixelated";
+            })
+            .catch((e) => this.plugin.displayError(e));
+    }
 }
 
 export function registerSetupUriHandler(plugin: ObsidianGit): void {

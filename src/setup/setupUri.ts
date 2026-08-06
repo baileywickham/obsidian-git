@@ -33,6 +33,36 @@ export function rewriteSshToHttps(url: string): string {
     return url;
 }
 
+/**
+ * The subset of settings worth shipping to a phone, plus forced
+ * invisible-sync defaults. Kept small so the resulting link fits in a
+ * comfortably scannable QR code (~2KB is the practical ceiling).
+ */
+export function buildMobileSettings(
+    settings: ObsidianGitSettings
+): Partial<ObsidianGitSettings> {
+    return {
+        commitMessage: settings.commitMessage,
+        autoCommitMessage: settings.autoCommitMessage,
+        commitDateFormat: settings.commitDateFormat,
+        syncMethod: settings.syncMethod,
+        disablePopupsForNoChanges: settings.disablePopupsForNoChanges,
+        showErrorNotices: settings.showErrorNotices,
+        githubOauthClientId: settings.githubOauthClientId,
+        // Desktop-specific paths never apply on the phone.
+        basePath: "",
+        gitDir: "",
+        // Invisible-sync defaults for mobile.
+        syncOnAppLifecycle: true,
+        autoPullOnBoot: true,
+        autoBackupAfterFileChange: true,
+        autoSaveInterval: 1,
+        pullBeforePush: true,
+        disablePopups: true,
+        showedMobileNotice: true,
+    };
+}
+
 /** A fresh random link key, base64url-encoded for the `k=` parameter. */
 export function generateSetupKey(): string {
     return toBase64Url(crypto.getRandomValues(new Uint8Array(KEY_LENGTH)));

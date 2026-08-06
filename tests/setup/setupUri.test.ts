@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     decodeSetupPayload,
+    buildMobileSettings,
     encodeSetupPayload,
     generateSetupKey,
     isSetupPayloadExpired,
@@ -79,5 +80,58 @@ describe("isSetupPayloadExpired", () => {
         expect(isSetupPayloadExpired(PAYLOAD, PAYLOAD.expiresAt + 1000)).toBe(
             true
         );
+    });
+});
+
+describe("buildMobileSettings", () => {
+    const FULL = {
+        commitMessage: "vault backup: {{date}}",
+        autoCommitMessage: "vault backup: {{date}}",
+        commitDateFormat: "YYYY-MM-DD HH:mm:ss",
+        syncMethod: "merge",
+        githubOauthClientId: "Ov23xyz",
+        basePath: "/Users/bailey/somewhere",
+        gitDir: "/custom/gitdir",
+        autoPullOnBoot: false,
+        autoSaveInterval: 0,
+        lineAuthor: { show: true },
+        hunks: { showSigns: true },
+    } as never;
+
+    it("forces invisible-sync defaults and clears desktop paths", () => {
+        const mobile = buildMobileSettings(FULL);
+
+        expect(mobile.basePath).toBe("");
+        expect(mobile.gitDir).toBe("");
+        expect(mobile.syncOnAppLifecycle).toBe(true);
+        expect(mobile.autoPullOnBoot).toBe(true);
+        expect(mobile.autoBackupAfterFileChange).toBe(true);
+        expect(mobile.autoSaveInterval).toBe(1);
+        expect(mobile.pullBeforePush).toBe(true);
+        expect(mobile.disablePopups).toBe(true);
+    });
+
+    it("carries over commit and auth settings but drops UI-only ones", () => {
+        const mobile = buildMobileSettings(FULL) as Record<string, unknown>;
+
+        expect(mobile.commitMessage).toBe("vault backup: {{date}}");
+        expect(mobile.githubOauthClientId).toBe("Ov23xyz");
+        expect(mobile.lineAuthor).toBeUndefined();
+        expect(mobile.hunks).toBeUndefined();
+    });
+
+    it("stays small enough for a scannable QR code", async () => {
+        const key = generateSetupKey();
+        const encoded = await encodeSetupPayload(
+            {
+                remoteUrl: "https://github.com/baileywickham/obsidian.git",
+                settings: buildMobileSettings(FULL),
+                expiresAt: 1_800_000_000_000,
+            },
+            key
+        );
+        const link = `obsidian://git-setup?d=${encoded}&k=${key}`;
+
+        expect(link.length).toBeLessThan(1200);
     });
 });
