@@ -142,6 +142,14 @@ async function handleSetupUri(
         );
         new Notice("Clone finished. Please restart Obsidian.", 0);
     } else {
+        // The vault may be a pre-existing repo with an SSH remote left over
+        // from an earlier setup — isomorphic-git only speaks HTTPS.
+        const target = formatRemoteUrl(payload.remoteUrl);
+        const current = await plugin.gitManager.getRemoteUrl("origin");
+        if (current !== target) {
+            await plugin.gitManager.setRemote("origin", target);
+            new Notice(`Switched remote 'origin' to ${target}`);
+        }
         await plugin.init({ fromReload: true });
         new Notice("Git mobile setup applied.");
     }
