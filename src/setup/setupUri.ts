@@ -14,6 +14,11 @@ export interface MobileSetupPayload {
     settings: Partial<ObsidianGitSettings>;
     /** Epoch milliseconds after which the link must be refused. */
     expiresAt: number;
+    /**
+     * Commit author for the receiving repo's local config — mobile git
+     * (isomorphic-git) never sees the desktop's global gitconfig.
+     */
+    author?: { name: string; email: string };
 }
 
 const IV_LENGTH = 12;

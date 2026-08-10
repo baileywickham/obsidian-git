@@ -13,6 +13,7 @@ const PAYLOAD: MobileSetupPayload = {
     remoteUrl: "https://github.com/baileywickham/obsidian.git",
     settings: { disablePopups: true, autoPullOnBoot: true },
     expiresAt: 1_800_000_000_000,
+    author: { name: "Bailey Wickham", email: "bailey@example.com" },
 };
 
 describe("rewriteSshToHttps", () => {

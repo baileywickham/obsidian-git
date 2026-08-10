@@ -32,12 +32,19 @@ export async function generateMobileSetupLink(
         return;
     }
 
+    const authorName = await plugin.gitManager.getConfig("user.name");
+    const authorEmail = await plugin.gitManager.getConfig("user.email");
+
     const key = generateSetupKey();
     const encoded = await encodeSetupPayload(
         {
             remoteUrl: rewriteSshToHttps(remote),
             settings: buildMobileSettings(plugin.settings),
             expiresAt: Date.now() + LINK_VALIDITY_MS,
+            author:
+                authorName && authorEmail
+                    ? { name: authorName, email: authorEmail }
+                    : undefined,
         },
         key
     );
@@ -71,6 +78,21 @@ class SetupQrModal extends Modal {
                 img.style.imageRendering = "pixelated";
             })
             .catch((e) => this.plugin.displayError(e));
+    }
+}
+
+async function applyAuthor(
+    plugin: ObsidianGit,
+    payload: { author?: { name: string; email: string } }
+): Promise<void> {
+    if (!payload.author) return;
+    const existingName = await plugin.gitManager.getConfig("user.name");
+    const existingEmail = await plugin.gitManager.getConfig("user.email");
+    if (!existingName) {
+        await plugin.gitManager.setConfig("user.name", payload.author.name);
+    }
+    if (!existingEmail) {
+        await plugin.gitManager.setConfig("user.email", payload.author.email);
     }
 }
 
@@ -140,6 +162,7 @@ async function handleSetupUri(
             ".",
             undefined
         );
+        await applyAuthor(plugin, payload);
         new Notice("Clone finished. Please restart Obsidian.", 0);
     } else {
         // The vault may be a pre-existing repo with an SSH remote left over
@@ -150,6 +173,7 @@ async function handleSetupUri(
             await plugin.gitManager.setRemote("origin", target);
             new Notice(`Switched remote 'origin' to ${target}`);
         }
+        await applyAuthor(plugin, payload);
         await plugin.init({ fromReload: true });
         new Notice("Git mobile setup applied.");
     }
