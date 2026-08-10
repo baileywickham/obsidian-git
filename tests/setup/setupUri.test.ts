@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    conflictsAreConfigOnly,
     decodeSetupPayload,
     buildMobileSettings,
     encodeSetupPayload,
@@ -134,5 +135,45 @@ describe("buildMobileSettings", () => {
         const link = `obsidian://git-setup?d=${encoded}&k=${key}`;
 
         expect(link.length).toBeLessThan(1200);
+    });
+});
+
+describe("rewriteSshToHttps with desktop-git output", () => {
+    it("handles a trailing newline from `git remote get-url`", () => {
+        expect(rewriteSshToHttps("git@github.com:bailey/vault.git\n")).toBe(
+            "https://github.com/bailey/vault.git"
+        );
+    });
+
+    it("trims https urls too", () => {
+        expect(rewriteSshToHttps("https://github.com/bailey/vault.git\n")).toBe(
+            "https://github.com/bailey/vault.git"
+        );
+    });
+});
+
+describe("conflictsAreConfigOnly", () => {
+    it("accepts conflicts confined to config directories", () => {
+        expect(
+            conflictsAreConfigOnly([
+                ".obsidian/app.json",
+                ".obsidian/plugins/obsidian-git-mobile/main.js",
+                ".obsidian-mobile/appearance.json",
+            ])
+        ).toBe(true);
+    });
+
+    it("rejects conflicts that touch notes", () => {
+        expect(conflictsAreConfigOnly([".obsidian/app.json", "TODO.md"])).toBe(
+            false
+        );
+    });
+
+    it("rejects an empty conflict list", () => {
+        expect(conflictsAreConfigOnly([])).toBe(false);
+    });
+
+    it("does not treat dot-obsidian-prefixed notes as config", () => {
+        expect(conflictsAreConfigOnly([".obsidian-notes.md"])).toBe(false);
     });
 });

@@ -25,6 +25,9 @@ const IV_LENGTH = 12;
 const KEY_LENGTH = 32;
 
 export function rewriteSshToHttps(url: string): string {
+    // Desktop git (`git remote get-url`) hands back the URL with a trailing
+    // newline, which would silently defeat the anchored patterns below.
+    url = url.trim();
     const scpStyle = url.match(/^[\w.-]+@([\w.-]+):(.+)$/);
     if (scpStyle) {
         return `https://${scpStyle[1]}/${scpStyle[2]}`;
@@ -66,6 +69,16 @@ export function buildMobileSettings(
         disablePopups: true,
         showedMobileNotice: true,
     };
+}
+
+/**
+ * Whether every checkout-conflict path lives inside an Obsidian config
+ * directory (`.obsidian/`, `.obsidian-mobile/`, …). Only then is it safe
+ * for setup to delete the local copies and retry a clone — a conflict on
+ * anything else could be a real note.
+ */
+export function conflictsAreConfigOnly(paths: string[]): boolean {
+    return paths.length > 0 && paths.every((p) => /^\.obsidian[^/]*\//.test(p));
 }
 
 /** A fresh random link key, base64url-encoded for the `k=` parameter. */

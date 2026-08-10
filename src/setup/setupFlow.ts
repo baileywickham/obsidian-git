@@ -6,6 +6,7 @@ import { GeneralModal } from "../ui/modals/generalModal";
 import { formatRemoteUrl } from "../utils";
 import {
     buildMobileSettings,
+    conflictsAreConfigOnly,
     decodeSetupPayload,
     encodeSetupPayload,
     generateSetupKey,
@@ -32,8 +33,14 @@ export async function generateMobileSetupLink(
         return;
     }
 
-    const authorName = await plugin.gitManager.getConfig("user.name");
-    const authorEmail = await plugin.gitManager.getConfig("user.email");
+    // Scope "all" so the desktop's global gitconfig (where author identity
+    // usually lives) is included; isomorphic-git ignores the scope argument.
+    const authorName = (
+        await plugin.gitManager.getConfig("user.name", "all")
+    )?.trim();
+    const authorEmail = (
+        await plugin.gitManager.getConfig("user.email", "all")
+    )?.trim();
 
     const key = generateSetupKey();
     const encoded = await encodeSetupPayload(
@@ -157,11 +164,32 @@ async function handleSetupUri(
     const requirements = await plugin.gitManager.checkRequirements();
     if (requirements === "missing-repo") {
         new Notice("Cloning your vault repo — keep Obsidian open…");
-        await plugin.gitManager.clone(
-            formatRemoteUrl(payload.remoteUrl),
-            ".",
-            undefined
-        );
+        const cloneUrl = formatRemoteUrl(payload.remoteUrl);
+        try {
+            await plugin.gitManager.clone(cloneUrl, ".", undefined);
+        } catch (e) {
+            // A fresh vault isn't empty: Obsidian's default config and the
+            // just-installed plugin collide with config files tracked in the
+            // repo. Deleting local CONFIG files (never notes) and retrying
+            // mirrors upstream's delete-config-dir clone flow.
+            const filepaths = (e as { data?: { filepaths?: string[] } }).data
+                ?.filepaths;
+            if (!filepaths || !conflictsAreConfigOnly(filepaths)) {
+                throw e;
+            }
+            new Notice(
+                "Replacing this vault's default config with the repo's…"
+            );
+            for (const path of filepaths) {
+                await plugin.app.vault.adapter.remove(path);
+            }
+            // A conflicted clone leaves nothing usable behind (the buffering
+            // fs adapter discards .git on failure) but poisons the git
+            // manager's state — rebuild it via init, then clone again into
+            // the now conflict-free vault.
+            await plugin.init({ fromReload: true });
+            await plugin.gitManager.clone(cloneUrl, ".", undefined);
+        }
         await applyAuthor(plugin, payload);
         new Notice("Clone finished. Please restart Obsidian.", 0);
     } else {

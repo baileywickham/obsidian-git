@@ -8,7 +8,12 @@ import type ObsidianGit from "../main";
  */
 export function registerLifecycleSync(plugin: ObsidianGit): void {
     plugin.registerDomEvent(document, "visibilitychange", () => {
-        if (!plugin.settings.syncOnAppLifecycle || !plugin.gitReady) return;
+        if (
+            !plugin.settings.syncOnAppLifecycle ||
+            !plugin.gitReady ||
+            plugin.localStorage.getPausedAutomatics()
+        )
+            return;
 
         if (document.visibilityState === "visible") {
             plugin.promiseQueue.addTask(() => plugin.pullChangesFromRemote());
