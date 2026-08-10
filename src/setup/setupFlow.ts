@@ -1,5 +1,7 @@
+import git from "isomorphic-git";
 import { Modal, Notice } from "obsidian";
 import QRCode from "qrcode";
+import { IsomorphicGit } from "../gitManager/isomorphicGit";
 import { signInWithGitHub } from "../auth/githubSignIn";
 import type ObsidianGit from "../main";
 import { GeneralModal } from "../ui/modals/generalModal";
@@ -180,15 +182,37 @@ async function handleSetupUri(
             new Notice(
                 "Replacing this vault's default config with the repo's…"
             );
-            for (const path of filepaths) {
-                await plugin.app.vault.adapter.remove(path);
-            }
-            // A conflicted clone leaves nothing usable behind (the buffering
-            // fs adapter discards .git on failure) but poisons the git
-            // manager's state — rebuild it via init, then clone again into
-            // the now conflict-free vault.
+            // Deleting the conflicting files and re-cloning loses a race:
+            // Obsidian recreates its config files within seconds, faster
+            // than a re-fetch. Instead fetch without touching the worktree,
+            // then force-checkout — deterministic, and safe because the
+            // conflict list proved only config files collide. init() first:
+            // a conflicted clone poisons the fs adapter's buffered state.
             await plugin.init({ fromReload: true });
-            await plugin.gitManager.clone(cloneUrl, ".", undefined);
+            const iso = plugin.gitManager;
+            if (!(iso instanceof IsomorphicGit)) throw e;
+            await iso.wrapFS(
+                git.clone({
+                    ...iso.getRepo(),
+                    dir: ".",
+                    url: cloneUrl,
+                    noCheckout: true,
+                })
+            );
+            const branch = (await iso.branchInfo()).current;
+            if (!branch) {
+                throw new Error(
+                    "Could not determine the default branch after fetch."
+                );
+            }
+            await iso.wrapFS(
+                git.checkout({
+                    ...iso.getRepo(),
+                    dir: ".",
+                    ref: branch,
+                    force: true,
+                })
+            );
         }
         await applyAuthor(plugin, payload);
         new Notice("Clone finished. Please restart Obsidian.", 0);
